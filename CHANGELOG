@@ -18,6 +18,8 @@ Performance improvements
 Fixed bugs
 ----------
 
+- order stored solutions by rational objective values in exact mode, including insertion, re-sorting, and transformed-space tie breaking
+
 - preserve problem arrays and ownership when allocation fails during variable or constraint insertion, avoiding crashes in cleanup
 
 - include original objective offset when writing transformed problem
