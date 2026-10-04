@@ -2719,30 +2719,40 @@ void* BMSallocBufferMemory_work(
    {
       size_t newsize;
       size_t i;
+      void** newdata;
+      size_t* newsizes;
+      unsigned int* newused;
 
       /* create additional buffers */
+      /* Keep existing arrays valid if a later reallocation fails; commit ndata only after all succeed. */
       newsize = calcMemoryGrowSize((size_t)buffer->arraygrowinit, buffer->arraygrowfac, buffer->firstfree + 1);
-      BMSreallocMemoryArray(&buffer->data, newsize);
-      if ( buffer->data == NULL )
+      newdata = buffer->data;
+      BMSreallocMemoryArray(&newdata, newsize);
+      if ( newdata == NULL )
       {
          printErrorHeader(filename, line);
          printError("Insufficient memory for reallocating buffer data storage.\n");
          return NULL;
       }
-      BMSreallocMemoryArray(&buffer->size, newsize);
-      if ( buffer->size == NULL )
+      buffer->data = newdata;
+      newsizes = buffer->size;
+      BMSreallocMemoryArray(&newsizes, newsize);
+      if ( newsizes == NULL )
       {
          printErrorHeader(filename, line);
          printError("Insufficient memory for reallocating buffer size storage.\n");
          return NULL;
       }
-      BMSreallocMemoryArray(&buffer->used, newsize);
-      if ( buffer->used == NULL )
+      buffer->size = newsizes;
+      newused = buffer->used;
+      BMSreallocMemoryArray(&newused, newsize);
+      if ( newused == NULL )
       {
          printErrorHeader(filename, line);
          printError("Insufficient memory for reallocating buffer used storage.\n");
          return NULL;
       }
+      buffer->used = newused;
 
       /* init data */
       for (i = buffer->ndata; i < newsize; ++i)
@@ -2761,10 +2771,19 @@ void* BMSallocBufferMemory_work(
    if ( buffer->size[bufnum] < size )
    {
       size_t newsize;
+      void* newdata;
 
       /* enlarge buffer */
       newsize = calcMemoryGrowSize((size_t)buffer->arraygrowinit, buffer->arraygrowfac, size);
-      BMSreallocMemorySize(&buffer->data[bufnum], newsize);
+      newdata = buffer->data[bufnum];
+      BMSreallocMemorySize(&newdata, newsize);
+      if ( newdata == NULL )
+      {
+         printErrorHeader(filename, line);
+         printError("Insufficient memory for reallocating buffer storage.\n");
+         return NULL;
+      }
+      buffer->data[bufnum] = newdata;
 
       /* clear new memory */
       if( buffer->clean )
@@ -2778,13 +2797,6 @@ void* BMSallocBufferMemory_work(
       assert( newsize > buffer->size[bufnum] );
       buffer->totalmem += newsize - buffer->size[bufnum];
       buffer->size[bufnum] = newsize;
-
-      if ( buffer->data[bufnum] == NULL )
-      {
-         printErrorHeader(filename, line);
-         printError("Insufficient memory for reallocating buffer storage.\n");
-         return NULL;
-      }
    }
    assert( buffer->size[bufnum] >= size );
 
@@ -2924,17 +2936,17 @@ void* BMSreallocBufferMemory_work(
 
       /* enlarge buffer */
       newsize = calcMemoryGrowSize((size_t)buffer->arraygrowinit, buffer->arraygrowfac, size);
-      BMSreallocMemorySize(&buffer->data[bufnum], newsize);
-      assert( newsize > buffer->size[bufnum] );
-      buffer->totalmem += newsize - buffer->size[bufnum];
-      buffer->size[bufnum] = newsize;
-      if ( buffer->data[bufnum] == NULL )
+      BMSreallocMemorySize(&newptr, newsize);
+      if ( newptr == NULL )
       {
          printErrorHeader(filename, line);
          printError("Insufficient memory for reallocating buffer storage.\n");
          return NULL;
       }
-      newptr = buffer->data[bufnum];
+      buffer->data[bufnum] = newptr;
+      assert( newsize > buffer->size[bufnum] );
+      buffer->totalmem += newsize - buffer->size[bufnum];
+      buffer->size[bufnum] = newsize;
    }
    assert( buffer->size[bufnum] >= size );
    assert( newptr == buffer->data[bufnum] );

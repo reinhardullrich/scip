@@ -126,7 +126,7 @@ SCIP_RETCODE SCIPrationalCreateBuffer(
    SCIP_RATIONAL**       rational            /**< pointer to the rational to create */
    )
 {
-   BMSallocBufferMemory(bufmem, rational);
+   SCIP_ALLOC( BMSallocBufferMemory(bufmem, rational) );
 
    new (&(*rational)->val) scip::Rational(0.0);
    (*rational)->isinf = FALSE;
@@ -218,11 +218,18 @@ SCIP_RETCODE SCIPrationalCreateBufferArray(
    int                   size                /**< the size of the array */
    )
 {
-   BMSallocBufferMemoryArray(mem, rational, size);
+   SCIP_ALLOC( BMSallocBufferMemoryArray(mem, rational, size) );
 
    for( int i = 0; i < size; ++i )
    {
-      SCIP_CALL( SCIPrationalCreateBuffer(mem, &(*rational)[i]) );
+      SCIP_RETCODE retcode = SCIPrationalCreateBuffer(mem, &(*rational)[i]);
+      if( retcode != SCIP_OKAY )
+      {
+         for( int j = i - 1; j >= 0; --j )
+            SCIPrationalFreeBuffer(mem, &(*rational)[j]);
+         BMSfreeBufferMemoryArray(mem, rational);
+         return retcode;
+      }
       (*rational)[i]->isfprepresentable = SCIP_ISFPREPRESENTABLE_TRUE;
    }
 
