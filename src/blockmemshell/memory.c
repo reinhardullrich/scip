@@ -37,6 +37,7 @@
 #define __STDC_LIMIT_MACROS
 #endif
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -346,6 +347,30 @@ long long BMSgetMemoryUsed_call(
 
 #endif
 
+/* Benchmark worker hook: installed once before solving; called only in existing
+ * allocation-error branches, before reporting or cleanup can alter the evidence.
+ * No callback lookup or extra check is added to successful allocations.
+ */
+static void (*allocationFailureCallback)(size_t, void*, int) = NULL;
+
+/* Local fork extension, deliberately outside the upstream public API. */
+SCIP_EXPORT void BMSsetAllocationFailureCallback(void (*callback)(size_t, void*, int));
+
+SCIP_EXPORT void BMSsetAllocationFailureCallback(
+   void                  (*callback)(size_t, void*, int)
+   )
+{
+   allocationFailureCallback = callback;
+}
+
+static void allocationFailed(size_t size, void* previous)
+{
+   int savederrno = errno;
+   if( allocationFailureCallback != NULL )
+      allocationFailureCallback(size, previous, savederrno);
+   errno = savederrno;
+}
+
 /** allocates array and initializes it with 0; returns NULL if memory allocation failed */
 void* BMSallocClearMemory_call(
    size_t                num,                /**< number of memory element to allocate */
@@ -376,6 +401,7 @@ void* BMSallocClearMemory_call(
 
    if( ptr == NULL )
    {
+      allocationFailed(num > (size_t)-1 / typesize ? (size_t)-1 : num * typesize, NULL);
       printErrorHeader(filename, line);
       printError("Insufficient memory for allocation of %llu bytes.\n", (unsigned long long)(num) * (typesize));
    }
@@ -410,6 +436,7 @@ void* BMSallocMemory_call(
 
    if( ptr == NULL )
    {
+      allocationFailed(size, NULL);
       printErrorHeader(filename, line);
       printError("Insufficient memory for allocation of %llu bytes.\n", (unsigned long long)size);
    }
@@ -448,6 +475,7 @@ void* BMSallocMemoryArray_call(
 
    if( ptr == NULL )
    {
+      allocationFailed(size, NULL);
       printErrorHeader(filename, line);
       printError("Insufficient memory for allocation of %llu bytes.\n", (unsigned long long)size);
    }
@@ -484,6 +512,7 @@ void* BMSreallocMemory_call(
 
    if( newptr == NULL )
    {
+      allocationFailed(size, ptr);
       printErrorHeader(filename, line);
       printError("Insufficient memory for reallocation of %llu bytes.\n", (unsigned long long)size);
    }
@@ -523,6 +552,7 @@ void* BMSreallocMemoryArray_call(
 
    if( newptr == NULL )
    {
+      allocationFailed(size, ptr);
       printErrorHeader(filename, line);
       printError("Insufficient memory for reallocation of %llu bytes.\n", (unsigned long long)size);
    }
